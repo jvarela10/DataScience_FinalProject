@@ -1,0 +1,588 @@
+---
+title: "Data Science Final Project"
+author: "Jeanette Varela and Jeff Joseph"
+date: "11/26/2019"
+output: html_document
+---
+
+#### Data can be found on Github repo (https://github.com/jvarela10/DataScience_FinalProject), completenbadata.csv
+#### Link to website: https://sites.google.com/view/nba-analysis-260finalproject
+
+# Overview and Motivation:
+
+Provide an overview of the project goals and the motivation for it. Consider that this will be read by people who did not see your project proposal.
+
+Inspired by the baseball discussion in class, we thought it would be interesting and fun to analyze a basketball data set. As National Basketball Association (NBA) fans and data scientists, my colleague and I, wanted to essentially learn more about basketball through data-driven methods as opposed to learning from outspoken and often times non-analytically oriented NBA commentators. These methods include exploring statistics related to the NBA, such as Player's Efficiency Ratings and Box Minus/Plus, that show trends over time and making inferences on our favorite teams and players. Our overall goals for the project were to see which statistics predict a player's peak years and whether or not Luka Doncic is as good as he appears to be and whether or not he will be able to maintain this unprecedented level of performance.
+
+Related Work: Anything that inspired you, such as a paper, a web site, or something we discussed in class.
+
+The inferential work we did in class when we discuss the baseball player Jose Iglesias was the primary inspiration for our decision to conduct sports related data analysis.
+Another inspiration for the project is the following paper on the impact of the use of data in modern basketball (NBA Data Analytics:Changing the Game, Nabil M. Abbas). Essentially, the paper talks about the increase in the use of data analytics in the decision making of NBA teams and inspired us to explore a similar topic.
+
+# Initial Questions:
+
+What questions are you trying to answer? How did these questions evolve over the course of the project? What new questions did you consider in the course of your analysis?
+
+Before we got our data, we had many questions in mind. A few ideas were to analyze if the claim that teams that play in their own city have a home advantage and referee are biased toward the home team. We wanted to investigate whehter good defensive plays are equally as important as the offensive side of the game. We also wanted to learn why teams work well together. the best teams are composed of what types of players? We couldn't follow through with these ideas because we did not have the appropriate data to answer these questions. 
+
+After getting a closer look at our data, we wanted to investigate whether or not LeBron has peaked or whether he is still on the rise? This question proved to be somewhat daunting considering the time constraint. We then moved towards an equally challenging question but less time consuming question. The first question we wanted to  investigate is:
+
+* What NBA statistics/attributes contribute significantly to the prediction of a player's peak? Could it be the number of points per game? Number of assists per game? Rebounds per game? or a combination of those statistics? 
+
+In addition, we wanted to ses the different combinations of player "types" that give a team the highest chance of winning a championship any given year but after realizing that every team must have a player at each position, we realized that this analysis could be misleading and ambiguous by mere definition. We realized from our exploratory data analysis we could answer a similar question: 
+
+* Which position contributes more to different aspects of the game? How does a player's position affect the odds of winning? Does the player's position contribute to only one statistic, in other words, do point guards have a better shooting percentage than small guards or centers? Do centers commit more turnovers than other positions?
+
+* Lastly, we wanted to investigate into whether or not Luka Doncic will continue playing well in the league by using a metric/statistic in our data set that tries to capture "success" (we decided to use usage percent as explained later).
+
+# Data: Source, scraping method, cleanup, etc.
+
+#####  We have comments within the code that also describes what we did.
+
+```{r, message=FALSE, warning=FALSE}
+library(shiny)
+library(purrr)
+library(ggplot2)
+library(readr)
+library(readxl)
+library(data.table)
+library(tidyverse) 
+library(stringr)
+library(dplyr)
+
+# DATA SCRAPING
+# From Basketball-Reference.com, we downloaded 32 files into a csv files for the 32 seasons 
+# We made a list of all the files that were .xls 
+#files <- list.files(path = "~/Desktop/Fall 2019 Courses/BST 260 Data Science/Data Science Project Data", pattern = "*.xls", full.names = T)
+#df.list <- lapply(files, read_excel)
+
+
+#create dataframe to hold all the data together
+#df <- rbindlist(df.list,fill= TRUE)
+
+#export the dataframe to save all the data into one csv file (versus running the above line everytime)
+#write.csv(df, "completenbadata.csv")
+
+#import single csv file
+df <- read.csv("completenbadata.csv")
+
+# DATACLEANING, WRANGLING
+#exlude anyone who plays less than 200 minutes played in a season
+#excluded anyone with a proportions that are greater than 1 because it is not feasible stat
+dfclean <- df %>% filter( TS. < 1  & X3PAr < 1 & MP > 200 & AST. < 100  )
+
+dfclean$Position <- dfclean$Pos
+dfclean$Position[dfclean$Position =="PF-C"]= "C-PF"
+dfclean$Position[dfclean$Position =="PF-SF"]= "SF-PF"
+dfclean$Position[dfclean$Position =="SG-SF"]= "SF-SG"
+dfclean$Position[dfclean$Position =="SG-PG"]= "PG-SG"
+
+dfclean <- dfclean %>% filter( Position == "C" | Position =="PF" | Position =="PG" | Position =="SF" | Position =="SG")
+
+
+#Cleanplayers name and drop variables we dont need
+dfclean <- dfclean %>% separate(Player, c("Player","Other"), sep = "\\*")
+dfclean <-dfclean %>% select(-c("Other", "...25","...20"))
+
+
+#recreate the Postion variable because the levels are the same
+dfclean$Position <- dfclean$Pos
+dfclean$Position[dfclean$Position =="PF-C"] = "C-PF"
+dfclean$Position[dfclean$Position =="PF-SF"] = "SF-PF"
+
+dfclean$Position[dfclean$Position =="SG-SF"] = "SF-SG"
+dfclean$Position[dfclean$Position =="SG-PG"] = "PG-SG"
+
+# keep only the position we are interested in
+dfclean <- dfclean %>% 
+            filter( Position == "C" | Position =="PF" | Position =="PG" | Position =="SF" | Position =="SG")
+
+```
+
+
+
+
+
+
+# Exploratory Analysis:
+
+What visualizations did you use to look at your data in different ways? What are the different statistical methods you considered? Justify the decisions you made, and show any major changes to your ideas. How did you reach these conclusions?
+
+When we scraped our data, we did some data exploration to better understand the NBA statistics that were being recorded. We looked at the distributions of the variables that we considered important or hold the most information about the players in the NBA. This included looking at histograms on most of our continuous data. Given that we multiple years worth of data, we were interested in looking at trends overtime. We had various columns (NBA statistics) in our data set that were interesting and we wanted to look at patterns over time. At first we were looking at individual players and looking at only one statistic at a time. We realized that the drop down menu was only recording a portion of the players in our data. So we needed a more feasible way to see the trends overtime. We first thought we can see trends over time by comparing them by team averages but this would mean that we needed 30 lines for each team in the NBA and wasn't very informative. Therefore, we decided that we would look at the average of all the NBA statistics in our data set by team position. This was much easier to understand and see trends overtime since there were 5 fundamental positions in basketball. We then created a shiny app that would allow the user to change the y-axis to any of the NBA statistics in the data set. This was useful because it allowed for use to see trends of the data for an average of all the players in  our data and not just a selection of a couple players. This helped us understand how players in certain positions are getting better overtime or not. 
+
+At first we wanted to see at what age players would peak but after discussion with Rolando, we discovered that we needed a clear definition of what peaks means. After looking through our variables we thought the Players Efficiency Rating was probably the best proxy when we study if someone is going to peak or not. We then looked at the distribution of peak and decided that we had to look at individuals player peak distribution, we then decided the 90th percentile would be the best cutoff in determine when a player will peak. We then did the same for every player in the data set.We implemented a logistic regression model to predict what NBA statistics are important predictors when we study peak (we defined peak as a single players 90th distribution of PER cutoff, if they were above the cutoff they were coded as 1 they had peaked that year and 0 if they did not peak). We first selected only variables that we believed were good predictors of peak and we made sure there was no multicollinearity between pairs of covariates in the data (we computed the correlation between all pairs of continuous covariates). Other statistical methods we looked at was conducting forward, backwards and stepwise regression variable selection methods to help us decide what covariates are good predictors of our binary outcome peak. 
+
+Initially we wanted to conducted a Bayesian analysis on players using Players Efficiency Rating but when we looked at the class notes we saw that we were dealing with proportions and that it would much better if we mimicked that example that we did in class. Therefore we use usage percent, which we also thought was a good proxy for how well a player is playing in the NBA. The usage percent records is an estimate of the percentage of team plays used by a player while he was on the floor. This was more closely related to a proportion and useful when doing the Bayesian analysis in class. We tried to calculate a better estimate of usage percent for two players that had incredible high values. We first looked at a 2012 rookie player (Jeremy Lin), Rolando suggested to us this would be a great starting point since we have validating data on this player. We went on to finding the prior and data distribution to get a posterior distribution on usage percent. Seeing that this worked and was rather accurate for Jeremy Lin, we did the same exact thing for 2018 Rookie of the Year Luka Doncic but we only have one data point for him so we can't really compare if our analysis was correct (YET). 
+
+
+
+```{r}
+# Data Exploration
+dfclean %>% 
+  ggplot(aes(Age)) +
+  geom_histogram(aes(y=..count..), colour="black", fill="white", binwidth = 1) +
+  geom_density(alpha=.2, fill="#FF6666") +
+  geom_vline(aes(xintercept=mean(Age)), color="black", linetype="dashed", size = 1) +
+  theme_bw() +
+  ggtitle("Distribution of Age, Mean = 27 years ")
+
+dfclean %>% 
+  ggplot(aes(G)) +
+  geom_histogram(aes(y=..count..), colour="black", fill="white", binwidth = 1) +
+  geom_density(alpha=.2, fill="#FF6666") +
+  geom_vline(aes(xintercept=mean(G)), color="black", linetype="dashed", size = 1) +
+  theme_bw() +
+  ggtitle("Distribution of Games, Mean = 58 Games")
+
+dfclean %>% 
+  ggplot(aes(MP)) +
+  geom_histogram(aes(y=..count..), colour="black", fill="white") +
+  geom_density(alpha=.2, fill="#FF6666") +
+  geom_vline(aes(xintercept=mean(MP)), color="black", linetype="dashed", size = 1) +
+  theme_bw() +
+  ggtitle("Distribution of Minutes Played, Mean = 1413 MP")
+
+
+dfclean %>% 
+  ggplot(aes(PER)) +
+  geom_histogram(aes(y=..count..), colour="black", fill="white") +
+  geom_density(alpha=.2, fill="#FF6666") +
+  geom_vline(aes(xintercept=mean(PER)), color="black", linetype="dashed", size = 1) +
+  theme_bw() +
+  ggtitle("Distribution of PER, Mean = 13.56")
+
+dfclean %>% 
+  ggplot(aes(TS.)) +
+  geom_histogram(aes(y=..count..), colour="black", fill="white") +
+  geom_density(alpha=.2, fill="#FF6666") +
+  geom_vline(aes(xintercept=mean(TS.)), color="black", linetype="dashed", size = 1) +
+  theme_bw() +
+  ggtitle("Distribution of True Scoring %, Mean = 52%")
+
+dfclean %>% 
+  ggplot(aes(USG.)) +
+  geom_histogram(aes(y=..count..), colour="black", fill="white") +
+  geom_density(alpha=.2, fill="#FF6666") +
+  geom_vline(aes(xintercept=mean(USG.)), color="black", linetype="dashed", size = 1) +
+  theme_bw() +
+  ggtitle("Distribution of Usage %, Mean = 18.9%")
+
+
+dfclean %>% 
+  ggplot(aes(WS.48)) +
+  geom_histogram(aes(y=..count..), colour="black", fill="white") +
+  geom_density(alpha=.2, fill="#FF6666") +
+  geom_vline(aes(xintercept=mean(WS.48)), color="black", linetype="dashed", size = 1) +
+  theme_bw() +
+  ggtitle("Distribution of Win Shares/48 Min, Mean =  0.08")
+
+
+dfclean %>% 
+  ggplot(aes(WS)) +
+  geom_histogram(aes(y=..count..), colour="black", fill="white") +
+  geom_density(alpha=.2, fill="#FF6666") +
+  geom_vline(aes(xintercept=mean(WS)), color="black", linetype="dashed", size = 1) +
+  theme_bw() +
+  ggtitle("Distribution of Win Shares/48 Min, Mean = 3")
+
+dfclean %>% 
+  ggplot(aes(BPM)) +
+  geom_histogram(aes(y=..count..), colour="black", fill="white") +
+  geom_density(alpha=.2, fill="#FF6666") +
+  geom_vline(aes(xintercept=mean(BPM)), color="black", linetype="dashed", size = 1) +
+  theme_bw() +
+  ggtitle("Distribution of Box Plus/Minus, Mean = -1.15")
+
+# correlation matrix
+#save continuous variables in a new dataframe
+vars<- c( "Age", "G" , "MP" ,"PER" ,"TS.", "X3PAr", "FTr","ORB.", "DRB." ,"TRB.", "AST.","STL." ,"BLK.","TOV.",    
+"USG.","OWS","DWS","WS","WS.48","OBPM","DBPM","BPM","VORP")
+
+cor <- dfclean[vars]
+
+#save correlation in a new matrix
+savecor<- as.data.frame(cor(cor))
+```
+
+```{r}
+
+# Additional plots to explore the data set or use in screencast
+
+#PER distribution for Lebron James
+dfclean %>%  filter(Player =="LeBron James") %>%ggplot() +
+             geom_histogram(aes(PER)) +
+             theme_bw()
+ 
+# LeBrons PER trend with his 90th percentile distribution cutoff, 2 peak seasons
+dfclean %>%  filter(Player =="LeBron James") %>%ggplot() +
+             geom_line(aes(Year, PER)) + geom_hline( yintercept =31.35, color="red") +
+             theme_bw() 
+
+#find 90th percentile for LeBron James
+per <- dfclean %>%
+       as_tibble() %>%
+       filter(Player == "LeBron James") %>%
+       .$PER
+  
+per[per >= quantile(per, probs = c(0.90))]
+
+#Plotting multiple stattstics for LeBron, can't really do this for all players
+dfclean %>% filter(Player =="LeBron James") %>% 
+            ggplot() +
+            geom_line(aes(Year, PER ,color="PER")) +
+            geom_line(aes(Year, G , color="Games")) +
+            geom_line(aes(Year, WS , color="Win")) +
+            geom_line(aes(Year, TS.*100 , color="tscore")) +
+            xlab("Year") +
+            theme_bw()
+
+
+```
+
+
+
+# Final Analysis:
+
+What did you learn about the data? How did you answer the questions? How can you justify your answers?
+
+If we had more time, we would have time to dive into our rich data set. We noticed that this data set was rather tidy, if there were NAs in the data, they were almost all removed when we cleaned that data of values that were abnormal (when players had a percent greater than 1 or when players had a really low minutes played during any season). 
+
+We broke down our project into three sections, the first section was the position analysis. We embedded our Shiny into our website, please follow the link above. I think we were surprised to find that centers were doing well compared to other positions in many of the NBA statistics or that we saw an increase in the latest decade. Some of the key observations we made from our Shiny app plots are: 
+
+* Average true shooting percent, was relatively similar for all positions until 1998 when point guards had started to report the least average true shooting percent while beginning in 2008 centers started outperforming other position.
+* In the late 1980s, centers were recording the lowest average players efficiency rating but after 2010 they steadily surpassed all other positions in the league.
+* In the average games and minutes played plots, we see two dips in the data corresponding to the two NBA lockout periods. The 1998–99 season NBA lockout lasted for more than six months which shortened the 80 regular season games per team to only 50 games. The 2011-12 NBA lockout was shortened to 66 regular season games per team.
+* Throughout many of the plots, we observed that Centers performed better than the other positions because they recorded the highest average in the following statistics: average free throw attempts, average defensive and offensive rebounds, average total rebounds, average blocks, average defensive win shares, average win shares, average box plus/minus and average value over replacement player.
+* Point guards clearly achieved the highest average assist percent and average steal percent but also had the highest average turnover percent compared to all other positions.
+* Average usage percent, average offensive box plus/minus and average value over replacement player for centers has consistently been low but all statistics have started to increase in 2010; the same trend was found for average offensive win shares but started increasing after 2011.
+* During the 2000-11 season, average offensive win shares and average value over replacement player for shooting guards both observed high peaks but since then have steadily decreased overtime. 
+
+We concluded that centers are not be given enough credited for their contribution in the game and we know that because they only won the Most Value Player award a few times. 
+
+Below we go over the other two section of our project.
+
+## Peak Analysis
+
+**Definition of Peak:**
+We decided that each player has peak seasons in relation to his own career. We use the statistic PER (Player Efficiency Ratings) as the main determinant of peak as it takes into account many many key aspects of a player's overall performance per minute. We defined a player's peak years as a year during which the player had a PER in the ninetieth percentile of his career PER distribution. Then we attempted to find odds of having a peak year based on the statistics reported for each player.
+
+```{r, message=FALSE, warning=FALSE}
+#find the years that players peaked by setting a cutoff point of 90th quantile of each players PER distribution
+peakyears <- dfclean %>% 
+  group_by(Player) %>% 
+  summarize(PERy = quantile(PER, probs = c(0.90))) 
+
+# add peak back to the original dataset,dfclean
+dfclean$quantpeak = "NA"
+
+for( i in peakyears$Player){
+  dfclean$quantpeak[dfclean$Player==i] = peakyears$PERy[peakyears$Player==i]
+}
+
+dfclean$quantpeak <- as.numeric(dfclean$quantpeak)
+
+
+#create binary peak variable
+
+dfclean$out <- "NA"
+
+for (i in 1:nrow(dfclean)){
+if (dfclean$PER[i] >= dfclean$quantpeak[i]){
+  dfclean$out[i] = 1
+}else{
+  dfclean$out[i] = 0
+}
+}
+
+dfclean$out <- as.numeric(dfclean$out)
+
+
+#Model Variable Selection (3 methods), we only included variables that we thought were good predictors of peak (not the full dataset)
+
+#model selection
+full.mod <- glm(out ~ as.factor(Position) + Age +  TS. + FTr + TRB. + AST. + STL. + BLK. + TOV. + USG. + WS.48 +  BPM + VORP, data= dfclean, family= binomial())
+summary(full.mod)
+
+mod_forw <- step(glm(out ~ 1, data = dfclean), ~as.factor(Position) + Age + TS. + FTr + TRB. + AST. + STL. + BLK. + TOV. + USG. + WS.48 +  BPM + VORP, direction = "forward", family= binomial())
+summary(mod_forw)
+
+# Backward Selection Procedure (using AIC)
+mod_back <- step(full.mod, direction = "backward")
+summary(mod_back)
+
+# Stepwise Selection Procedure (using AIC)
+mod_step <- step(glm(out ~ 1, data = dfclean), ~as.factor(Position) + Age + TS. + FTr + TRB. + AST. + STL. + BLK. + TOV. + USG. + WS.48 +  BPM + VORP, direction = "both", family= binomial())
+summary(mod_step)
+
+#we wanted to see if Position matter but it was not significant in the model
+mod1 <- glm(out ~ as.factor(Position) + Age + TS. + FTr + TRB. + AST. + STL. + BLK. + TOV. + USG. + WS.48 +  BPM + VORP, data= dfclean, family= binomial())
+
+#we wanted to see if Free throw percent was significant in the model
+mod2 <- glm(out ~  Age + TS. + FTr + TRB. + AST. + STL. + BLK. + TOV. + USG. + WS.48 +  BPM + VORP,  data= dfclean, family= binomial())
+
+#final model,all significant predictors
+finalmod <-glm(out ~  Age + TS.  + TRB. + AST. + STL. + BLK. + TOV. + USG. + WS.48 +  BPM + VORP, data= dfclean, family= binomial())
+
+summary(finalmod)
+
+#coefficients of the model
+format(exp(finalmod$coefficients), digits=4, scientific = FALSE)
+
+
+#model diagnostics, how well is our model predicting (should've probably had a test and validation set)
+
+peak.predict <- predict(finalmod,type=c("response"))
+dfclean$peak.predict <- peak.predict
+
+#compute AUC
+library(pROC)
+g <- roc(dfclean, out, peak.predict)
+
+#plot ROC
+plot(1-g$specificities, g$sensitivities, type = "l", ylab = "True Positive Rate (Sensitivity)", xlab = "False Positive Rate (1-Specificity)", main = "ROC Curve", col = "navy")
+abline(0,1, col = "light blue")
+
+
+auc(g)
+
+```
+
+
+## Bayesian Analysis
+
+During the 2012-13 season, Harvard alum Jeremy Lin made headlines after putting up 38 points against the Lakers, hitting a game-winning three in Toronto. Basketball fans were hopeful that Linsanity (Lin + insanity) could bring some change to the Knicks' losing streak.  Successfully, he averaged 20.9 points and 8.4 assists per game in February of that season, leading the Knicks to 10 wins in a 13-game stretch. 
+
+We will use USG% as a proxy for how well a player will do in a game. Although there are other measures to assess a player's success, we decided to use USG% as we believe it is a good measure of players contribution in scoring, defensive and offensive team plays. We followed the example in where we can think of USG% as an outcome (contributing to a team play or not) that follows a binomial distribution with a success rate of $p$. So if the success rate is indeed 0.281, the standard error of 35 games is:
+
+$$
+\sqrt{\frac{0.281 (1-0.281)}{35}}=0.0759
+$$
+
+```{r, echo=FALSE}
+0.281 +1.96*0.0759
+0.281 -1.96*0.0759
+```
+
+
+Thus a 95% CI of this estimate is between 0.1320846 and 0.4299154. 
+
+If we study the distribution of USG% for all players between 1999 and 2018. We see the average player had an AVG of 0.189 and the standard deviation of the population of players was 0.0471. Notice 28% is high and in the tail of the distribution, meaning that its not as likely as the other values.
+
+```{r, message=FALSE, warning=FALSE}
+# Distribution of USG for multiple uears
+dfclean %>% filter(USG., Year %in% 1999:2018) %>% 
+  ggplot(aes(USG.)) +
+  geom_histogram(color="black", binwidth = .01) +
+  facet_wrap(~Year)
+
+#the mean and sd of USG% before 2011 (for Jeremy Lin)
+dfclean %>% filter(Year < 2011) %>% summarise(mean(USG.), sd(USG.))
+
+#the overall mean and sd of USG% (full data-used for Luka)
+mean(dfclean$USG.)
+
+sd(dfclean$USG.)
+
+# USG distribtuion for all years in the data
+dfclean %>% 
+  ggplot(aes(USG.)) +
+  geom_histogram(color="black") +
+  theme_bw()
+
+
+```
+
+The approach that we will use is a hierarchical model, 
+
+where
+
+$$
+\begin{aligned}
+p &\sim N(\mu, \tau^2) \mbox{ describes randomness in picking a player}\\
+Y \mid p &\sim N(p, \sigma^2) \mbox{ describes randomness in the performance of this particular player}
+\end{aligned}
+$$
+
+
+with $\mu = 0.189$, $\tau = 0.0477$, and $\sigma^2 = p(1-p)/N$.
+
+For Jeremy Lin, we see 
+$$
+\begin{aligned}
+p &\sim N(0.189, 0.0471^2) \\
+Y \mid p &\sim N(p, 0.0759^2) 
+\end{aligned}
+$$
+$$
+\begin{aligned}
+p &\sim N(0.189, 0.0471^2) \mbox{ , describes randomness in picking a player}\\
+Y \mid p &\sim N(p, 0.0759^2) \mbox{ , describes randomness in the performance of Jeremy Lin}
+\end{aligned}
+$$
+
+
+
+The posterior mean is now 
+
+$$
+\begin{aligned}
+\mbox{E}(p \mid y) &= B \mu + (1-B) Y\\
+&= \mu + (1-B)(Y-\mu)\\
+B &= \frac{\sigma^2}{\sigma^2+\tau^2}
+\end{aligned}
+$$
+
+and in Jeremy Lin's Case
+
+
+$$
+\begin{aligned}
+\mbox{E}(p \mid Y=0.281) &= B \times 0.189 + (1 - B) \times 0.281 \\
+&= 0.189 + (1 - B)(0.281 - 0.189) \\
+B &=\frac{0.0759^2}{0.0759^2 + 0.0471^2} = 0.7220\\
+\mbox{E}(p \mid Y=0.281) &\approx 0.2146
+\end{aligned}
+$$
+
+
+The standard error can be shown to be:
+
+$$
+\mbox{SE}(p\mid y)^2 = \frac{1}{1/\sigma^2+1/\tau^2}
+= \frac{1}{1/0.0759^2 + 1/0.0471^2} = 0.00160164
+$$
+
+
+
+and the standard deviation is therefore 0.04038662.
+
+The new 95% CI is now between 0.1358422 and  0.2941578. 
+
+ Here are the Jeremy Lin usage percentage for the next five seasons 
+
+|Season| USG%|
+|-----|------|
+|2012-13|20.8|
+|2013-14|20.4|
+|2014-15|21.9|
+|2015-16|22.2|
+|2016-17|21.4*|
+|Avg w/o 2012-13|22.38|
+* Average of three teams he played on
+
+
+Now lets look at Luka Doncic
+
+$$
+\sqrt{\frac{0.305 (1-0.305)}{72}}=0.0542
+$$
+
+```{r, message=FALSE, warning=FALSE}
+#save all small guard data (Luka is a small guard)
+ysg<-dfclean %>%
+    filter(Position =="SG") %>%
+    group_by(Player) %>% 
+    arrange(Year) %>% 
+    slice(1)
+
+#compare Luka USG with all other small guards
+ecdf(ysg$USG.)(23.96)
+ecdf(ysg$USG.)(30.5)
+
+#save all 19 year olds data
+
+y19 <- dfclean %>%
+    filter(Age==19) %>%
+    group_by(Player) %>% 
+    arrange(Year) %>% 
+    slice(1)
+
+#compare Luka USG with all other 19 year old
+ecdf(y19$USG.)(23.96)
+ecdf(y19$USG.)(30.5)
+
+# all players in the league
+yall <- dfclean %>%
+    group_by(Player) %>% 
+    arrange(Year) %>% 
+    slice(1)
+
+#compare Luka USG with all players in the league
+ecdf(yall$USG.)(23.96)
+ecdf(yall$USG.)(30.5)
+
+
+0.305 +1.96*sqrt((0.305*(1-0.305))/(72))
+
+0.305 -1.96*sqrt((0.305*(1-0.305))/(72))
+
+# plots the Naive 
+dfclean %>% 
+  ggplot(aes(USG.)) +
+  geom_histogram(color="black") +
+  theme_bw() + geom_vline(xintercept = 30.5 , colour="red") +
+  xlab("Usage Percent") + 
+  ggtitle("Distribution of Usage Percent") +
+  geom_text(aes(x=36, label="Luka Doncic", y=1000), colour="red", text=element_text(size=11))
+
+#plot the Naive and Bayesian estimate of Usage percent for Luka
+dfclean %>% 
+  ggplot(aes(USG.)) +
+  geom_histogram(color="black") +
+  theme_bw() + geom_vline(xintercept = c(24, 30.5) , colour=c("blue", "red")) +
+  xlab("Usage Percent") + 
+  ggtitle("Distribution of Usage Percent") +
+  geom_text(aes(x=25, label="Bayes Estimate", y=1550), colour="blue", angle=90, vjust = 0.5, text=element_text(size=11)) +
+  geom_text(aes(x=30.5, label="Naive Estimate", y=1000), colour="red", angle=90, vjust = 2,text=element_text(size=11))
+
+
+
+```
+
+The 95% CI for this estimate is between 0.1986513 and 0.4113487. 
+
+in Luka Doncic's case, we have more data and get a standard deviation is slightly different.
+
+$$
+\begin{aligned}
+p &\sim N(0.189, 0.0477^2) \mbox{ , describes randomness in picking a player}\\
+Y \mid p &\sim N(p, 0.0542^2) \mbox{ , describes randomness in the performance of Jeremy Lin}
+\end{aligned}
+$$
+
+
+$$
+\begin{aligned}
+\mbox{E}(p \mid Y=0.305) &= B \times 0.189 + (1 - B) \times 0.305 \\
+&= 0.189 + (1 - B)(0.305 - 0.189) \\
+B &=\frac{0.0542^2}{0.0542^2 + 0.0477^2} = 0.564\\
+\mbox{E}(p \mid Y=0.305) &\approx 0.2396
+\end{aligned}
+$$
+
+
+The standard error  can be shown to be:
+
+$$
+\mbox{SE}(p\mid y)^2 = \frac{1}{1/\sigma^2+1/\tau^2}
+= \frac{1}{1/0.0542^2 + 1/0.0477^2} = 0.00128
+$$
+
+
+and the standard deviation is therefore 0.03580772
+
+```{r, echo=FALSE}
+sqrt(0.001282193)
+
+.2396 + 1.96*sqrt(0.001282193)
+.2396 -1.96*sqrt(0.001282193)
+```
+
+
+The new 95% CI is now between 0.1694169 and 0.3097831.
+
+Using Bayesian analysis helped us predict a new estimate and we think this is justifiable answer since we first tried the same analysis for Jeremy Lin and was decently well at predicting an estimated and a credible interval that contained his true usage percent. 
+
+
+
+
